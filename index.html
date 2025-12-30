@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Turbo Racer Pro Max</title>
+    <script src="https://api.gamemonetize.com/sdk.js"></script>
+    <style>
+        :root { --gold: #f1c40f; --glass: rgba(20, 20, 20, 0.95); }
+        body { margin: 0; background: #000; font-family: 'Segoe UI', Tahoma, sans-serif; overflow: hidden; color: white; touch-action: none; }
+        
+        canvas { display: block; margin: 0 auto; background: #111; z-index: 1; position: relative; }
+
+        /* UI Layers */
+        .hud { position: absolute; top: 15px; width: 100%; display: flex; justify-content: space-around; z-index: 100; font-weight: bold; pointer-events: none; text-shadow: 2px 2px 4px #000; font-size: 18px; }
+        
+        #home-menu { position: absolute; inset: 0; background: rgba(0,0,0,0.6); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200; backdrop-filter: blur(8px); }
+
+        .sidebar { display: flex; flex-direction: column; gap: 15px; margin-bottom: 30px; }
+        
+        .side-btn { 
+            background: var(--glass); border: 2px solid rgba(255,255,255,0.3); color: white; 
+            padding: 15px 25px; border-radius: 15px; width: 160px; font-size: 14px; 
+            font-weight: bold; cursor: pointer; transition: 0.3s; pointer-events: auto;
+        }
+        .side-btn:hover { border-color: var(--gold); transform: translateY(-2px); }
+        .side-btn:active { transform: scale(0.95); background: var(--gold); color: black; }
+
+        .start-btn { 
+            background: var(--gold); color: black; border: none; padding: 20px 60px; 
+            border-radius: 50px; font-size: 30px; font-weight: 800; cursor: pointer; 
+            box-shadow: 0 10px 30px rgba(241, 196, 15, 0.4); transition: 0.3s; pointer-events: auto;
+        }
+        .start-btn:active { transform: scale(0.9); }
+
+        /* Shop Overlays */
+        .overlay { 
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+            background: var(--glass); padding: 25px; border-radius: 25px; 
+            border: 2px solid var(--gold); width: 85%; max-width: 450px; 
+            z-index: 300; display: none; max-height: 80vh; overflow-y: auto; pointer-events: auto;
+        }
+
+        .tab-nav { display: flex; gap: 10px; margin-bottom: 20px; position: sticky; top: 0; background: #1a1a1a; padding: 10px; border-radius: 12px; }
+        .tab-nav button { flex: 1; padding: 12px; border: none; background: #333; color: white; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .tab-nav button.active { background: var(--gold); color: black; }
+
+        .shop-sec h3 { font-size: 16px; color: var(--gold); margin: 20px 0 10px; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .item-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        .item { background: #222; border: 2px solid #444; border-radius: 12px; display: flex; flex-direction: column; align-items: center; padding: 10px; cursor: pointer; }
+        .item.selected { border-color: var(--gold); background: #333; box-shadow: 0 0 10px var(--gold); }
+        .c-box { width: 35px; height: 35px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); }
+        .price-tag { font-size: 10px; color: var(--gold); margin-top: 5px; font-weight: bold; }
+
+        /* Ads Container */
+        .ad-bottom { position: absolute; bottom: 0; width: 100%; text-align: center; z-index: 50; pointer-events: auto; background: rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body>
+
+    <div class="hud">
+        <div style="color:var(--gold)">💰 <span id="coinCount">0</span></div>
+        <div id="highScoreText">BEST: 0</div>
+        <div id="liveScore" style="display:none">SCORE: 0</div>
+    </div>
+
+    <div id="home-menu">
+        <h1 style="font-size: 45px; text-align:center; margin-bottom:40px; text-shadow: 0 5px 15px #000;">TURBO RACER<br><span style="font-size:20px; color:var(--gold)">PRO MAX</span></h1>
+        
+        <div class="sidebar">
+            <button class="side-btn" onclick="openOverlay('shop-menu')">GARAGE</button>
+            <button class="side-btn" onclick="openOverlay('road-menu')">ROADS</button>
+            <button class="side-btn" onclick="toggleTime()">DAY / NIGHT</button>
+        </div>
+
+        <button class="start-btn" onclick="startGame()">START RACE</button>
+    </div>
+
+    <div id="shop-menu" class="overlay">
+        <div class="tab-nav">
+            <button id="t-your" class="active" onclick="setTab('your')">MY CAR</button>
+            <button id="t-enemy" onclick="setTab('enemy')">ENEMY CAR</button>
+        </div>
+        <div id="shop-content"></div>
+        <button class="side-btn" style="width:100%; margin-top:20px; background:var(--gold); color:black" onclick="closeOverlays()">SAVE & EXIT</button>
+    </div>
+
+    <div id="road-menu" class="overlay">
+        <h2 style="text-align:center; color:var(--gold)">SELECT TRACK</h2>
+        <div id="road-list"></div>
+        <button class="side-btn" style="width:100%; margin-top:20px;" onclick="closeOverlays()">BACK</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="ad-bottom">
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6525481768803463" crossorigin="anonymous"></script>
+        <ins class="adsbygoogle" style="display:inline-block;width:320px;height:50px" data-ad-client="ca-pub-6525481768803463" data-ad-slot="9191576187"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+    </div>
+
+    <script>
+        // SDK Initialize
+        window.addEventListener("load", function () {
+            window.gameMonetize = window.gameMonetize || [];
+            gameMonetize.push({ gameId: "etrs0hwa9tyda2kya5cll0y15vshzrof" });
+        });
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        function resize() {
+            canvas.width = Math.min(window.innerWidth, 480);
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Game Data & Storage
+        let totalCoins = parseInt(localStorage.getItem("totalCoins")) || 1000;
+        let bestScore = parseInt(localStorage.getItem("bestScore")) || 0;
+        let gameActive = false, isNight = false, roadType = 'city', shopTab = 'your', score = 0, roadOffset = 0;
+        let difficulty = 1;
+
+        let pSet = JSON.parse(localStorage.getItem("pSet")) || { color: "#3498db", mix: null, model: "2d-1" };
+        let eSet = JSON.parse(localStorage.getItem("eSet")) || { color: "#e74c3c", mix: null, model: "2d-1" };
+        let unlocked = JSON.parse(localStorage.getItem("unlocked")) || ["#3498db", "#e74c3c", "2d-1"];
+
+        const colors = ["#3498db", "#e74c3c", "#2ecc71", "#f1c40f", "#9b59b6", "#ffffff", "#333333", "#e67e22", "#1abc9c", "#ff9ff3", "#54a0ff", "#5f27cd"];
+        const mixColors = [
+            { id: "mx1", c1: "#ff4e50", c2: "#f9d423" }, { id: "mx2", c1: "#1e3c72", c2: "#2a5298" },
+            { id: "mx3", c1: "#00b09b", c2: "#96c93d" }, { id: "mx4", c1: "#834d9b", c2: "#d04ed6" },
+            { id: "mx5", c1: "#ee0979", c2: "#ff6a00" }, { id: "mx6", c1: "#434343", c2: "#000000" },
+            { id: "mx7", c1: "#1d2b64", c2: "#f8cdda" }, { id: "mx8", c1: "#7f00ff", c2: "#e100ff" }
+        ];
+        const models = { 
+            "2D": ["2d-1", "2d-2", "2d-3"], 
+            "3D": ["3d-1", "3d-2", "3d-3"], 
+            "PREM": ["p-1", "p-2", "p-3"] 
+        };
+
+        function updateHUD() {
+            document.getElementById("coinCount").innerText = totalCoins;
+            document.getElementById("highScoreText").innerText = "BEST: " + bestScore;
+            localStorage.setItem("totalCoins", totalCoins);
+            localStorage.setItem("unlocked", JSON.stringify(unlocked));
+            localStorage.setItem("pSet", JSON.stringify(pSet));
+            localStorage.setItem("eSet", JSON.stringify(eSet));
+        }
+
+        // --- Shop Logic ---
+        function setTab(t) { shopTab = t; renderShop(); }
+        function openOverlay(id) { 
+            closeOverlays();
+            document.getElementById(id).style.display = 'block'; 
+            if(id === 'shop-menu') renderShop();
+            if(id === 'road-menu') renderRoadMenu();
+        }
+        function closeOverlays() { document.querySelectorAll('.overlay').forEach(o => o.style.display='none'); }
+
+        function renderShop() {
+            const cont = document.getElementById('shop-content');
+            cont.innerHTML = "";
+            addSec(cont, "BODY COLORS", colors, "color", 250);
+            addSec(cont, "GRADIENT MIX", mixColors, "mix", 600);
+            for(let m in models) addSec(cont, m + " MODELS", models[m], "model", 1000);
+        }
+
+        function addSec(parent, title, items, type, price) {
+            const sec = document.createElement('div'); sec.className = "shop-sec";
+            sec.innerHTML = `<h3>${title}</h3>`;
+            const grid = document.createElement('div'); grid.className = "item-grid";
+            items.forEach(item => {
+                const id = item.id || item;
+                const isOwned = unlocked.includes(id);
+                const div = document.createElement('div'); div.className = "item";
+                let current = (shopTab === 'your') ? pSet : eSet;
+                if((type==='color' && current.color===item) || (type==='mix' && current.mix?.id===id) || (type==='model' && current.model===id)) div.classList.add('selected');
+
+                if(type==='color') div.innerHTML = `<div class="c-box" style="background:${item}"></div>`;
+                else if(type==='mix') div.innerHTML = `<div class="c-box" style="background:linear-gradient(${item.c1},${item.c2})"></div>`;
+                else div.innerHTML = `<span style="font-size:11px;font-weight:bold">${id.toUpperCase()}</span>`;
+
+                div.innerHTML += `<div class="price-tag">${isOwned ? "OWNED" : "💰"+price}</div>`;
+                div.onclick = () => {
+                    if(isOwned) {
+                        let cur = (shopTab==='your') ? pSet : eSet;
+                        if(type==='color'){ cur.color=item; cur.mix=null; }
+                        if(type==='mix') cur.mix=item;
+                        if(type==='model') cur.model=id;
+                    } else if(totalCoins >= price) { totalCoins -= price; unlocked.push(id); }
+                    updateHUD(); renderShop();
+                };
+                grid.appendChild(div);
+            });
+            sec.appendChild(grid); parent.appendChild(sec);
+        }
+
+        function renderRoadMenu() {
+            const rList = ['city', 'forest', 'desert'];
+            const cont = document.getElementById('road-list'); cont.innerHTML = "";
+            rList.forEach(r => {
+                const div = document.createElement('div');
+                div.className = "side-btn"; div.style.width = "90%"; div.style.marginBottom = "10px";
+                div.style.borderColor = roadType === r ? "var(--gold)" : "white";
+                div.innerText = r.toUpperCase();
+                div.onclick = () => { roadType = r; closeOverlays(); };
+                cont.appendChild(div);
+            });
+        }
+
+        function toggleTime() { isNight = !isNight; }
+
+        // --- Game Engine ---
+        let player = { x: 200, y: 0, targetX: 200 };
+        let enemies = [], coins = [];
+
+        function drawCar(x, y, cfg, isEnemy) {
+            ctx.save();
+            // Night Lights
+            if(isNight) {
+                ctx.shadowBlur = 30; ctx.shadowColor = "white";
+                ctx.fillStyle = "rgba(255,255,255,0.15)";
+                ctx.beginPath();
+                if(isEnemy) { ctx.moveTo(x, y+60); ctx.lineTo(x-40, y+180); ctx.lineTo(x+80, y+180); ctx.lineTo(x+40, y+60); }
+                else { ctx.moveTo(x, y+10); ctx.lineTo(x-40, y-150); ctx.lineTo(x+80, y-150); ctx.lineTo(x+40, y+10); }
+                ctx.fill();
+            }
+
+            // Tyres with rubber lines
+            ctx.fillStyle = "#111";
+            [[ -8, 10], [40, 10], [-8, 45], [40, 45]].forEach(t => {
+                ctx.fillRect(x + t[0], y + t[1], 8, 15);
+                ctx.fillStyle = "#333"; ctx.fillRect(x+t[0]+3, y+t[1], 2, 15); ctx.fillStyle = "#111";
+            });
+
+            // Body
+            let fill = cfg.mix ? ctx.createLinearGradient(x, y, x, y+70) : cfg.color;
+            if(cfg.mix) { fill.addColorStop(0, cfg.mix.c1); fill.addColorStop(1, cfg.mix.c2); }
+            ctx.fillStyle = fill;
+            ctx.fillRect(x, y, 40, 70);
+
+            // 3D/Detailing
+            if(cfg.model.includes('3d') || cfg.model.includes('p-')) {
+                ctx.fillStyle = "rgba(0,0,0,0.2)"; ctx.fillRect(x+35, y, 5, 70);
+                ctx.fillStyle = "rgba(255,255,255,0.2)"; ctx.fillRect(x, y, 40, 5);
+            }
+            ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x+5, y+(isEnemy?45:10), 30, 15); // Glass
+            ctx.restore();
+        }
+
+        function loop() {
+            ctx.clearRect(0,0,canvas.width, canvas.height);
+            player.y = canvas.height - 150;
+            player.x += (player.targetX - player.x) * 0.15;
+
+            // Road Background
+            let bgCol = isNight ? "#050505" : (roadType==='forest'?"#0a1a0a":roadType==='desert'?"#c2a172":"#222");
+            ctx.fillStyle = bgCol; ctx.fillRect(0,0,canvas.width, canvas.height);
+
+            // Road Track
+            let roadCol = isNight ? "#111" : (roadType==='forest'?"#1d331d":roadType==='desert'?"#634a31":"#333");
+            ctx.fillStyle = roadCol; ctx.fillRect(50, 0, canvas.width-100, canvas.height);
+
+            // Borders (Side lines)
+            for(let i=0; i<canvas.height + 80; i+=40) {
+                ctx.fillStyle = (Math.floor((i+roadOffset)/40)%2===0) ? "#eee" : "#f00";
+                ctx.fillRect(45, i+(roadOffset%40)-40, 5, 40);
+                ctx.fillRect(canvas.width-50, i+(roadOffset%40)-40, 5, 40);
+            }
+
+            // Middle Dashed Line
+            ctx.setLineDash([30, 30]); ctx.lineDashOffset = -roadOffset;
+            ctx.strokeStyle = "rgba(255,255,255,0.4)"; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.moveTo(canvas.width/2, 0); ctx.lineTo(canvas.width/2, canvas.height); ctx.stroke();
+            roadOffset += 10 + difficulty;
+
+            if(gameActive) {
+                drawCar(player.x, player.y, pSet, false);
+                // Spawning Logic (Max 4-5 enemies)
+                if(Math.random() < 0.02 + (difficulty * 0.005) && enemies.length < 5) {
+                    enemies.push({ x: 60 + Math.random()*(canvas.width-160), y: -100, s: 6 + Math.random()*4 + difficulty });
+                }
+                if(Math.random() < 0.015) coins.push({x: 60+Math.random()*(canvas.width-160), y: -100});
+                difficulty = Math.min(score / 40, 8);
+            } else {
+                player.x = canvas.width/2 - 20;
+                drawCar(player.x, player.y, pSet, false);
+            }
+
+            // Enemies Update
+            enemies.forEach((e, i) => {
+                e.y += e.s; drawCar(e.x, e.y, eSet, true);
+                if(gameActive && player.x < e.x+35 && player.x+35 > e.x && player.y < e.y+65 && player.y+65 > e.y) gameOver();
+                if(e.y > canvas.height) { enemies.splice(i,1); score++; document.getElementById('liveScore').innerText="SCORE: "+score; }
+            });
+
+            // Coins Update
+            coins.forEach((c, i) => {
+                c.y += 7; ctx.fillStyle = "#f1c40f"; ctx.beginPath(); ctx.arc(c.x, c.y, 12, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle="#000"; ctx.font="bold 12px Arial"; ctx.fillText("$", c.x-4, c.y+4);
+                if(player.x < c.x+12 && player.x+40 > c.x-12 && player.y < c.y+12 && player.y+70 > c.y-12) {
+                    coins.splice(i,1); totalCoins += 50; updateHUD();
+                }
+                if(c.y > canvas.height) coins.splice(i,1);
+            });
+
+            requestAnimationFrame(loop);
+        }
+
+        function startGame() {
+            gameActive = true; score = 0; difficulty = 1; enemies = []; coins = [];
+            document.getElementById('home-menu').style.display='none';
+            document.getElementById('liveScore').style.display='block';
+        }
+
+        function gameOver() {
+            gameActive = false;
+            if (window.gameMonetize) gameMonetize.push({ type: "showInterstitial" });
+            if(score > bestScore) bestScore = score;
+            document.getElementById('home-menu').style.display='flex';
+            document.getElementById('liveScore').style.display='none';
+            updateHUD();
+        }
+
+        // Controls
+        canvas.addEventListener('mousemove', e => {
+            let rect = canvas.getBoundingClientRect();
+            player.targetX = Math.max(55, Math.min(canvas.width-95, e.clientX - rect.left - 20));
+        });
+        canvas.addEventListener('touchmove', e => {
+            let rect = canvas.getBoundingClientRect();
+            player.targetX = Math.max(55, Math.min(canvas.width-95, e.touches[0].clientX - rect.left - 20));
+            e.preventDefault();
+        }, {passive:false});
+
+        updateHUD();
+        loop();
+    </script>
+</body>
+</html>
